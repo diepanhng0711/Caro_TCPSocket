@@ -99,14 +99,14 @@ int winnerWinnerChickenDinner(char playerSymbol) {
 }
 
 int main() {
-    int sockfd;
+    int client_fd;
     struct sockaddr_in server_addr;
     int bytes_sent, bytes_received;
     char recv_data[BUFF_SIZE], send_data[BUFF_SIZE];
     char reply[MAX_SIZE];
 
-    sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (sockfd < 0) {
+    client_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (client_fd < 0) {
         perror("ERROR opening socket");
         exit(1);
     }
@@ -119,11 +119,14 @@ int main() {
         exit(1);
     }
 
-    if (connect(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+    if (connect(client_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         perror("ERROR connecting");
         exit(1);
+    } else {
+        printf("Connected to server %s at port %s ...\n", SERVER_ADDR, PORT);
     }
 
+    //init the caro board for the game
     initCaroBoard();
     printCaroBoard();
 
@@ -139,9 +142,9 @@ int main() {
 
         char buffer[BUFF_SIZE];
         memset(buffer, 0, BUFF_SIZE);
-        sprintf(buffer, "%d %d", x, y);
-        // int n = write(sockfd, buffer, strlen(buffer));
-        bytes_sent = send(sockfd, buffer, strlen(buffer), 0);
+        sprintf(buffer, "%d %c", x, c);
+        // int n = write(client_fd, buffer, strlen(buffer));
+        bytes_sent = send(client_fd, buffer, strlen(buffer), 0);
         if (bytes_sent <= 0) {
             perror("ERROR writing to socket");
             exit(1);
@@ -150,7 +153,7 @@ int main() {
         board[x][y] = 'X';
         printCaroBoard();
         
-        // bytes_received = recv(sockfd, recv_data, MAX_SIZE - 1, 0);
+        // bytes_received = recv(client_fd, recv_data, MAX_SIZE - 1, 0);
         // if (bytes_received <= 0) {
         //     perror("ERROR reading from socket");
         //     exit(1);
@@ -160,7 +163,7 @@ int main() {
 
         if (winnerWinnerChickenDinner('X')) {
             sprintf(buffer, "ENDGAME");
-            int n = write(sockfd, buffer, strlen(buffer));
+            int n = write(client_fd, buffer, strlen(buffer));
             if (n < 0) {
                 perror("ERROR writing to socket");
                 exit(1);
@@ -174,11 +177,11 @@ int main() {
     char buffer[BUFF_SIZE];
     memset(buffer, 0, BUFF_SIZE);
     sprintf(buffer, "ENDGAME");
-    int n = write(sockfd, buffer, strlen(buffer));
+    int n = write(client_fd, buffer, strlen(buffer));
     if (n < 0) {
         perror("ERROR writing to socket");
         exit(1);
     }
-    close(sockfd);
+    close(client_fd);
     return 0;
 }

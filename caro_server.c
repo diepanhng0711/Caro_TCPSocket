@@ -13,9 +13,9 @@
 
 //DEFINE ENVIROMENT VARIABLES FOR PROGRAMS
 #define BOARD_SIZE 15
-#define PORT 3434
+#define PORT 5501
 #define BUFF_SIZE 1024
-#define MAX_SIZE 1024
+#define MAX_SIZE 256
 #define MAX_CLIENTS 2
 
 char board[BOARD_SIZE][BOARD_SIZE];
@@ -105,12 +105,16 @@ int winnerWinnerChickenDinner(char playerSymbol) {
 }
 
 int main() {
+    int i;
     int server_fd, client_fd;
     socklen_t client_len;
     struct sockaddr_in server_addr, client_addr;
     int bytes_sent, bytes_received;
     char recv_data[BUFF_SIZE], send_data[BUFF_SIZE];
+    char buffer[BUFF_SIZE];
     char reply[MAX_SIZE];
+    int num_clients = 0;
+    int winner = 0;
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
@@ -128,46 +132,112 @@ int main() {
         exit(1);
     }
 
-    listen(server_fd, 5);
-    client_len = sizeof(client_addr);
-    client_fd = accept(server_fd, (struct sockaddr *) &client_addr, &client_len);
-    if (client_fd < 0) {
-        perror("ERROR on accept");
+    int ret = listen(server_fd, 10);
+    if (ret < 0) {
+        perror("ERROR on listen");
         exit(1);
     }
 
-    initCaroBoard();
+    client_len = sizeof(client_addr);
 
-    int n;
-    char buffer[256];
-    while (1) {
-        memset(buffer, 0, 256);
-        // n = read(client_fd, buffer, 255);
-        bytes_received = recv(client_fd, recv_data, BUFF_SIZE - 1, 0);
-        if (n < 0) {
-            perror("ERROR reading from socket");
+    printf("Waiting for clients to connect...\n");
+    while (num_clients < MAX_CLIENTS) {
+        client_fds[num_clients] = accept(server_fd, (struct sockaddr *) &client_addr, &client_len);
+        if (client_fds[num_clients] < 0) {
+            perror("ERROR on accept");
             exit(1);
         }
-        if (bytes_received <= 0) {
-            printf("\nConnection closed! END GAME!!!\n");
-            break;
-        }
-        recv_data[bytes_received] = '\0';
-        if (strcmp(recv_data, "ENDGAME") == 0) {
-            sprintf(reply, "Goodbye Bae");
-            bytes_sent = send(client_fd, reply, strlen(reply), 0);
-        } else {
-            printf("Received message: %s\n", recv_data);
+        printf("Client %d connected\n", num_clients + 1);
+        num_clients++;
+    }
 
-            int x, y;
-            sscanf(buffer, "%d %d", &x, &y);
-            // board[x][y] = 'X';
-            addMove('X', x, y);
+    //NOtify each client their symbol
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        if (i == 0) {
+            sprintf(send_data, "X");
+        } else {
+            sprintf(send_data, "O");
+        }
+        bytes_sent = send(client_fds[i], send_data, strlen(send_data), 0);
+        if (bytes_sent < 0) {
+            perror("ERROR writing to socket");
+            exit(1);
         }
     }
 
+    initCaroBoard();
+    memset(buffer, 0, BUFF_SIZE);
+    memset(reply, 0, MAX_SIZE);
+    memset(recv_data, 0, BUFF_SIZE);
+    memset(send_data, 0, BUFF_SIZE);
+
+    //Enter the game
+    while(1) {
+        int i;
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            memset(buffer, 0, BUFF_SIZE);
+            if (i == 0) {
+                sprintf(buffer, "%d", 0);
+                printf("X's turn\n");
+            } else {
+                sprintf(buffer, "%d", 1);
+                printf("O's turn\n");
+            }
+            bytes_sent = send(client_fds[i], buffer, strlen(buffer), 0);
+            if (bytes_sent < 0) {
+                perror("ERROR writing to socket");
+                exit(1);
+            } else {
+                printf("Sent message: %s\n", buffer);
+            }
+
+            memset(buffer, 0, BUFF_SIZE);
+            recv(client_fds[i], buffer, BUFF_SIZE - 1, 0);
+            recv_data[bytes_received] = '\0';
+
+            int x, y;
+            sscanf(buffer, "%d %d", &x, &y);
+            if (i == 0) {
+                addMove('X', x, y);
+            } else {
+                addMove('O', x, y);
+            }
+            printf("Received message: %s\n", buffer);
+            printf("Board after move:\n");
+            printCaroBoard();
+
+            if (winnerWinnerChickenDinner('X')) {
+                winner = 'X';
+                break;
+            } else if (winnerWinnerChickenDinner('O')) {
+                winner = 'O';
+                break;
+            }
+        }
+
+        if (winner) {
+            int send_winner = send(client_fds[winner], "WIN", strlen("WIN"), 0);
+            if (send_winner < 0) {
+                perror("ERROR writing to socket");
+                exit(1);
+            }
+            int send_loser = send(client_fds[(winner + 1) % 2], "LOSE!", strlen("LOSE"), 0);
+            if (send_loser < 0) {
+                perror("ERROR writing to socket");
+                exit(1);
+            }
+            break;
+        }
+
+        memset(recv_data, 0, BUFF_SIZE);
+        memset(send_data, 0, BUFF_SIZE);
+        memset(buffer, 0, BUFF_SIZE);
+    }
+
     //Close socket and display message
-    close(client_fd);
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        close(client_fds[i]);
+    }
     close(server_fd);
     return 0;
 }

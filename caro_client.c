@@ -14,7 +14,7 @@
 //DEFINE ENVIROMENT VARIABLES FOR PROGRAMS
 #define BOARD_SIZE 15
 #define SERVER_ADDR "127.0.0.1"
-#define PORT 3434
+#define PORT 5501
 #define BUFF_SIZE 1024
 #define MAX_SIZE 256
 
@@ -98,12 +98,17 @@ int winnerWinnerChickenDinner(char playerSymbol) {
     return 0;
 }
 
+void addMove(char playerSymbol, int x, int y) {
+    board[x][y] = playerSymbol;
+}
+
 int main() {
     int client_fd;
     struct sockaddr_in server_addr;
     int bytes_sent, bytes_received;
     char recv_data[BUFF_SIZE], send_data[BUFF_SIZE];
     char reply[MAX_SIZE];
+    int playerPosition;
 
     client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client_fd < 0) {
@@ -123,7 +128,18 @@ int main() {
         perror("ERROR connecting");
         exit(1);
     } else {
-        printf("Connected to server %s at port %s ...\n", SERVER_ADDR, PORT);
+        printf("Connected to server %s at port %d ...\n", SERVER_ADDR, PORT);
+    }
+
+    //Receive symbol of player
+    bytes_received = recv(client_fd, recv_data, sizeof(recv_data), 0);
+    char playerSymbol = recv_data[0];
+    printf("You are player %c\n\n", playerSymbol);
+
+    if (playerSymbol == 'X') {
+        playerPosition = 0;
+    } else {
+        playerPosition = 1;
     }
 
     //init the caro board for the game
@@ -133,6 +149,16 @@ int main() {
     int x, y;
     char c;
     while (1) {
+        memset(recv_data, 0, BUFF_SIZE);
+        memset(send_data, 0, BUFF_SIZE);
+
+        //Wait for the server to notify the player's turn
+        bytes_received = recv(client_fd, recv_data, sizeof(recv_data), 0);
+        printf("check %s\n", recv_data);
+        if (bytes_received <= 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        }
         do {
             printf("Enter move x(%d -> %d) _ y(%c -> %c)): \n", 0, BOARD_SIZE, 97, (97 + BOARD_SIZE));
             scanf("%d %c", &x, &c);
@@ -150,27 +176,12 @@ int main() {
             exit(1);
         }
 
-        board[x][y] = 'X';
+        addMove(playerSymbol, x, y);
         printCaroBoard();
-        
-        // bytes_received = recv(client_fd, recv_data, MAX_SIZE - 1, 0);
-        // if (bytes_received <= 0) {
-        //     perror("ERROR reading from socket");
-        //     exit(1);
-        // }
-        // recv_data[bytes_received] = '\0';
-        // printf("Received: %s\n", recv_data);
 
-        if (winnerWinnerChickenDinner('X')) {
-            sprintf(buffer, "ENDGAME");
-            int n = write(client_fd, buffer, strlen(buffer));
-            if (n < 0) {
-                perror("ERROR writing to socket");
-                exit(1);
-            }
-            printf("You win!\n");
-            break;
-        }
+        memset(recv_data, 0, BUFF_SIZE);
+        memset(send_data, 0, BUFF_SIZE);
+        memset(buffer, 0, BUFF_SIZE);
     }
 
     //Send endgame message to server

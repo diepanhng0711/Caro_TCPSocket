@@ -14,7 +14,6 @@
 
 //DEFINE ENVIROMENT VARIABLES FOR PROGRAMS
 #define BOARD_SIZE 15
-#define PORT 5504
 #define BUFF_SIZE 1024
 #define MAX_SIZE 256
 #define MAX_CLIENTS 2
@@ -52,8 +51,7 @@ void printCaroBoard() {
         for (j = 0; j < BOARD_SIZE; j++) {
             printf("%s", "--");
         }
-        printf("-+\n");
-        
+        printf("-+\n");      
     }
 
 }
@@ -105,8 +103,15 @@ int winnerWinnerChickenDinner(char playerSymbol) {
     return 0;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        printf("Usage: ./server PortNumber\n");
+        return -1;
+    }
+
     int i;
+    int x, y;
+    char c;
     int server_fd, client_fd;
     socklen_t client_len;
     struct sockaddr_in server_addr, client_addr;
@@ -116,7 +121,8 @@ int main() {
     char reply[MAX_SIZE];
     int num_clients = 0;
     int winner = -1;
-    int prevX, prevY;
+    int prevX;
+    char prevY;
     bool hasStarted = false;
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -128,7 +134,7 @@ int main() {
     memset((char *) &server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(PORT);
+    server_addr.sin_port = htons(atoi(argv[1]));
 
     if (bind(server_fd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         perror("ERROR on binding");
@@ -143,6 +149,7 @@ int main() {
 
     client_len = sizeof(client_addr);
 
+    printf("You've created the server at PORT %s", argv[1]);
     printf("Waiting for clients to connect...\n");
     while (num_clients < MAX_CLIENTS) {
         client_fds[num_clients] = accept(server_fd, (struct sockaddr *) &client_addr, &client_len);
@@ -154,7 +161,7 @@ int main() {
         num_clients++;
     }
 
-    //NOtify each client their symbol
+    //Notify each client their symbol
     for (i = 0; i < MAX_CLIENTS; i++) {
         if (i == 0) {
             sprintf(send_data, "X");
@@ -188,10 +195,14 @@ int main() {
         for (i = 0; i < MAX_CLIENTS; i++) {
             memset(buffer, 0, BUFF_SIZE);
             if (i == 0) {
-                sprintf(buffer, "%d", 0);
+                if (!hasStarted) {
+                    sprintf(buffer, "%s", "LADY FIRST");
+                } else {
+                    sprintf(buffer, "%d %c", prevX, prevY);
+                }
                 printf("X's turn\n");
             } else {
-                sprintf(buffer, "%d", 1);
+                sprintf(buffer, "%d %c", prevX, prevY);
                 printf("O's turn\n");
             }
             bytes_sent = send(client_fds[i], buffer, strlen(buffer), 0);
@@ -206,9 +217,9 @@ int main() {
             recv(client_fds[i], buffer, BUFF_SIZE - 1, 0);
             recv_data[bytes_received] = '\0';
 
-            int x, y;
-            char c;
             sscanf(buffer, "%d %c", &x, &c);
+            prevX = x;
+            prevY = c;
             y = (int) c - 97;
 
             if (i == 0) {
@@ -236,7 +247,7 @@ int main() {
                 perror("ERROR writing to socket");
                 exit(1);
             }
-            int send_loser = send(client_fds[(winner + 1) % 2], "LOSE!", strlen("LOSE"), 0);
+            int send_loser = send(client_fds[(winner + 1) % 2], "LOSE", strlen("LOSE"), 0);
             if (send_loser < 0) {
                 perror("ERROR writing to socket");
                 exit(1);
@@ -245,6 +256,9 @@ int main() {
             memset(send_data, 0, BUFF_SIZE);
             memset(buffer, 0, BUFF_SIZE);
             break;
+        }
+        if(!hasStarted) {
+            hasStarted = true;
         }
     }
 

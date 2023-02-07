@@ -14,7 +14,6 @@
 //DEFINE ENVIROMENT VARIABLES FOR PROGRAMS
 #define BOARD_SIZE 15
 #define SERVER_ADDR "127.0.0.1"
-#define PORT 5504
 #define BUFF_SIZE 1024
 #define MAX_SIZE 256
 
@@ -49,18 +48,9 @@ void printCaroBoard() {
         for (j = 0; j < BOARD_SIZE; j++) {
             printf("%s", "--");
         }
-        printf("-+\n");
-        
+        printf("-+\n");   
     }
 
-}
-
-void checkExistedMove(int x, int y) {
-    if (board[x][y] != ' ') {
-        printf("This move is existed. Please choose another move!\n");
-        return 1;
-    }
-    return 0;
 }
 
 int winnerWinnerChickenDinner(char playerSymbol) {
@@ -110,7 +100,12 @@ void addMove(char playerSymbol, int x, int y) {
     board[x][y] = playerSymbol;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        printf("Usage: ./client PortNumber\n");
+        return -1;
+    }
+
     int client_fd;
     struct sockaddr_in server_addr;
     int bytes_sent, bytes_received;
@@ -118,6 +113,7 @@ int main() {
     char buffer[BUFF_SIZE];
     char reply[MAX_SIZE];
     int playerPosition;
+    int opponentSymbol;
 
     client_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (client_fd < 0) {
@@ -128,7 +124,7 @@ int main() {
 
     memset((char *) &server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(PORT);
+    server_addr.sin_port = htons(atoi(argv[1]));
     if (inet_pton(AF_INET, SERVER_ADDR, &server_addr.sin_addr) <= 0) {
         perror("ERROR inet_pton");
         exit(1);
@@ -138,20 +134,24 @@ int main() {
         perror("ERROR connecting");
         exit(1);
     } else {
-        printf("Connected to server %s at port %d ...\n", SERVER_ADDR, PORT);
+        printf("Connected to server %s at port %d ...\n", SERVER_ADDR, atoi(argv[1]));
     }
 
     //Receive symbol of player
     bytes_received = recv(client_fd, recv_data, sizeof(recv_data), 0);
     char playerSymbol = recv_data[0];
-    printf("You are player %c\n\n", playerSymbol);
 
     if (playerSymbol == 'X') {
         playerPosition = 0;
+        opponentSymbol = 'O';
     } else {
         playerPosition = 1;
+        opponentSymbol = 'X';
     }
 
+    printf("You are player %d _ \"%c\"\n\n", playerPosition , playerSymbol);
+
+    //Send OK to server
     send(client_fd, "OK", 2, 0);
 
     //init the caro board for the game
@@ -159,6 +159,8 @@ int main() {
     printCaroBoard();
 
     int x, y;
+    int opponentX;
+    char opponentY;
     char c;
     while (1) {
         memset(recv_data, 0, BUFF_SIZE);
@@ -167,7 +169,7 @@ int main() {
         //Wait for the server to notify the player's turn
         printf("Waiting for your turn..\n");
         bytes_received = recv(client_fd, recv_data, sizeof(recv_data), 0);
-        printf("check %s\n", recv_data);
+        printf("You are player: %d\n", playerPosition);
         if (bytes_received <= 0) {
             perror("ERROR reading from socket");
             exit(1);
@@ -185,6 +187,11 @@ int main() {
             printf("Draw game\n");
             close(client_fd);
             return 0;
+        } else if (strcmp(recv_data, "LADY FIRST") != 0) {
+            sscanf(recv_data, "%d %c", &opponentX, &opponentY);
+            printf("Opponent's move: %d %c\n", opponentX, opponentY);
+            addMove(opponentSymbol, opponentX, (int) opponentY - 97);
+            printCaroBoard();
         }
 
         do {
@@ -205,7 +212,6 @@ int main() {
 
         memset(buffer, 0, BUFF_SIZE);
         sprintf(buffer, "%d %c", x, c);
-        // int n = write(client_fd, buffer, strlen(buffer));
         bytes_sent = send(client_fd, buffer, strlen(buffer), 0);
         if (bytes_sent <= 0) {
             perror("ERROR writing to socket");

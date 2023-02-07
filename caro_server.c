@@ -1,6 +1,7 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<unistd.h>
+#include<stdbool.h>
 #include<netdb.h>
 #include<netinet/in.h>
 #include<sys/socket.h>
@@ -13,7 +14,7 @@
 
 //DEFINE ENVIROMENT VARIABLES FOR PROGRAMS
 #define BOARD_SIZE 15
-#define PORT 5501
+#define PORT 5504
 #define BUFF_SIZE 1024
 #define MAX_SIZE 256
 #define MAX_CLIENTS 2
@@ -114,7 +115,9 @@ int main() {
     char buffer[BUFF_SIZE];
     char reply[MAX_SIZE];
     int num_clients = 0;
-    int winner = 0;
+    int winner = -1;
+    int prevX, prevY;
+    bool hasStarted = false;
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd < 0) {
@@ -163,6 +166,14 @@ int main() {
             perror("ERROR writing to socket");
             exit(1);
         }
+        //receive OK from each client
+        bytes_received = recv(client_fds[i], recv_data, BUFF_SIZE, 0);
+        if (bytes_received < 0) {
+            perror("ERROR reading from socket");
+            exit(1);
+        } else {
+            printf("Client %d: %s\n", i + 1, recv_data);
+        }
     }
 
     initCaroBoard();
@@ -196,26 +207,30 @@ int main() {
             recv_data[bytes_received] = '\0';
 
             int x, y;
-            sscanf(buffer, "%d %d", &x, &y);
+            char c;
+            sscanf(buffer, "%d %c", &x, &c);
+            y = (int) c - 97;
+
             if (i == 0) {
-                addMove('X', x, y);
+                board[x][y] = 'X';
             } else {
-                addMove('O', x, y);
+                board[x][y] = 'O';
             }
             printf("Received message: %s\n", buffer);
-            printf("Board after move:\n");
             printCaroBoard();
-
+            
             if (winnerWinnerChickenDinner('X')) {
-                winner = 'X';
+                winner = 0;
+                printf("X wins!\n");
                 break;
             } else if (winnerWinnerChickenDinner('O')) {
-                winner = 'O';
+                winner = 1;
+                printf("O wins!\n");
                 break;
             }
         }
 
-        if (winner) {
+        if (winner == 0 || winner == 1) {
             int send_winner = send(client_fds[winner], "WIN", strlen("WIN"), 0);
             if (send_winner < 0) {
                 perror("ERROR writing to socket");
@@ -226,12 +241,11 @@ int main() {
                 perror("ERROR writing to socket");
                 exit(1);
             }
+            memset(recv_data, 0, BUFF_SIZE);
+            memset(send_data, 0, BUFF_SIZE);
+            memset(buffer, 0, BUFF_SIZE);
             break;
         }
-
-        memset(recv_data, 0, BUFF_SIZE);
-        memset(send_data, 0, BUFF_SIZE);
-        memset(buffer, 0, BUFF_SIZE);
     }
 
     //Close socket and display message

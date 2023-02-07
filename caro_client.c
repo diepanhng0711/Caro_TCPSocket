@@ -14,7 +14,7 @@
 //DEFINE ENVIROMENT VARIABLES FOR PROGRAMS
 #define BOARD_SIZE 15
 #define SERVER_ADDR "127.0.0.1"
-#define PORT 5501
+#define PORT 5504
 #define BUFF_SIZE 1024
 #define MAX_SIZE 256
 
@@ -53,6 +53,14 @@ void printCaroBoard() {
         
     }
 
+}
+
+void checkExistedMove(int x, int y) {
+    if (board[x][y] != ' ') {
+        printf("This move is existed. Please choose another move!\n");
+        return 1;
+    }
+    return 0;
 }
 
 int winnerWinnerChickenDinner(char playerSymbol) {
@@ -107,6 +115,7 @@ int main() {
     struct sockaddr_in server_addr;
     int bytes_sent, bytes_received;
     char recv_data[BUFF_SIZE], send_data[BUFF_SIZE];
+    char buffer[BUFF_SIZE];
     char reply[MAX_SIZE];
     int playerPosition;
 
@@ -115,6 +124,7 @@ int main() {
         perror("ERROR opening socket");
         exit(1);
     }
+    printf("Client socket created successfully!\n");
 
     memset((char *) &server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -142,6 +152,8 @@ int main() {
         playerPosition = 1;
     }
 
+    send(client_fd, "OK", 2, 0);
+
     //init the caro board for the game
     initCaroBoard();
     printCaroBoard();
@@ -153,20 +165,44 @@ int main() {
         memset(send_data, 0, BUFF_SIZE);
 
         //Wait for the server to notify the player's turn
+        printf("Waiting for your turn..\n");
         bytes_received = recv(client_fd, recv_data, sizeof(recv_data), 0);
         printf("check %s\n", recv_data);
         if (bytes_received <= 0) {
             perror("ERROR reading from socket");
             exit(1);
         }
+
+        if (strcmp(recv_data, "WIN") == 0) {
+            printf("You win the game\n");
+            close(client_fd);
+            return 0;
+        } else if (strcmp(recv_data, "LOSE") == 0) {
+            printf("You lose the game\n");
+            close(client_fd);
+            return 0;
+        } else if (strcmp(recv_data, "DRAW") == 0) {
+            printf("Draw game\n");
+            close(client_fd);
+            return 0;
+        }
+
         do {
             printf("Enter move x(%d -> %d) _ y(%c -> %c)): \n", 0, BOARD_SIZE, 97, (97 + BOARD_SIZE));
             scanf("%d %c", &x, &c);
-        } while ((x < 0 || x >= BOARD_SIZE) || ((int) c < 97 || (int) c >= (BOARD_SIZE + 97)));
+        } while ((x < 0 || x >= BOARD_SIZE) || (((int) c < 97 || (int) c >= (BOARD_SIZE + 97))) || (board[x][(int) c - 97] != ' '));
+
+        if (x == 99) {
+            memset(recv_data, 0, BUFF_SIZE);
+            memset(send_data, 0, BUFF_SIZE);
+            memset(buffer, 0, BUFF_SIZE);
+            printf("You quit the game\n");
+            close(client_fd);
+            return 0;
+        }
         
         y = (int) c - 97;
 
-        char buffer[BUFF_SIZE];
         memset(buffer, 0, BUFF_SIZE);
         sprintf(buffer, "%d %c", x, c);
         // int n = write(client_fd, buffer, strlen(buffer));
@@ -185,7 +221,6 @@ int main() {
     }
 
     //Send endgame message to server
-    char buffer[BUFF_SIZE];
     memset(buffer, 0, BUFF_SIZE);
     sprintf(buffer, "ENDGAME");
     int n = write(client_fd, buffer, strlen(buffer));

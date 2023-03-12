@@ -18,6 +18,18 @@
 #define MAX_SIZE 256
 #define MAX_CLIENTS 2
 
+//DEFINE MESSAGE TYPE
+#define MSG_GO_FIRST "LADY FIRST"
+#define MSG_PLAYER1 "X"
+#define MSG_PLAYER2 "O"
+#define MSG_X 'X'
+#define MSG_Y 'O'
+#define MSG_INVALID "INVALID"
+#define MSG_READY "OK"
+#define MSG_WIN "WIN"
+#define MSG_LOSE "LOSE"
+#define MSG_DRAW "DRAW"
+
 char board[BOARD_SIZE][BOARD_SIZE];
 int client_fds[MAX_CLIENTS];
 int current_turn = 0;
@@ -103,6 +115,18 @@ int winnerWinnerChickenDinner(char playerSymbol) {
     return 0;
 }
 
+bool checkDraw() {
+    int i, j;
+    for (i = 0; i < BOARD_SIZE; i++) {
+        for (j = 0; j < BOARD_SIZE; j++) {
+            if (board[i][j] == ' ') {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 int main(int argc, char *argv[]) {
     if (argc != 2) {
         printf("Usage: ./server PortNumber\n");
@@ -164,9 +188,9 @@ int main(int argc, char *argv[]) {
     //Notify each client their symbol
     for (i = 0; i < MAX_CLIENTS; i++) {
         if (i == 0) {
-            sprintf(send_data, "X");
+            sprintf(send_data, MSG_PLAYER1);
         } else {
-            sprintf(send_data, "O");
+            sprintf(send_data, MSG_PLAYER2);
         }
         bytes_sent = send(client_fds[i], send_data, strlen(send_data), 0);
         if (bytes_sent < 0) {
@@ -196,7 +220,7 @@ int main(int argc, char *argv[]) {
             memset(buffer, 0, BUFF_SIZE);
             if (i == 0) {
                 if (!hasStarted) {
-                    sprintf(buffer, "%s", "LADY FIRST");
+                    sprintf(buffer, "%s", MSG_GO_FIRST);
                 } else {
                     sprintf(buffer, "%d %c", prevX, prevY);
                 }
@@ -242,12 +266,12 @@ int main(int argc, char *argv[]) {
         }
 
         if (winner == 0 || winner == 1) {
-            int send_winner = send(client_fds[winner], "WIN", strlen("WIN"), 0);
+            int send_winner = send(client_fds[winner], MSG_WIN, strlen(MSG_WIN), 0);
             if (send_winner < 0) {
                 perror("ERROR writing to socket");
                 exit(1);
             }
-            int send_loser = send(client_fds[(winner + 1) % 2], "LOSE", strlen("LOSE"), 0);
+            int send_loser = send(client_fds[(winner + 1) % 2], MSG_LOSE, strlen(MSG_LOSE), 0);
             if (send_loser < 0) {
                 perror("ERROR writing to socket");
                 exit(1);

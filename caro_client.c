@@ -336,9 +336,9 @@ void bot_move()
 // MAIN
 int main(int argc, char *argv[])
 {
-    if (argc != 2)
+    if (argc != 3)
     {
-        printf("Usage: ./client PortNumber\n");
+        printf("Usage: ./client ServerAddr PortNumber\n");
         return -1;
     }
 
@@ -408,8 +408,8 @@ int main(int argc, char *argv[])
 
     memset((char *)&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(atoi(argv[1]));
-    if (inet_pton(AF_INET, SERVER_ADDR, &server_addr.sin_addr) <= 0)
+    server_addr.sin_port = htons(atoi(argv[2]));
+    if (inet_pton(AF_INET, argv[1], &server_addr.sin_addr) <= 0)
     {
         perror("ERROR inet_pton");
         exit(1);
@@ -422,7 +422,7 @@ int main(int argc, char *argv[])
     }
     else
     {
-        printf("Connected to server %s at port %d ...\n", SERVER_ADDR, atoi(argv[1]));
+        printf("Connected to server %s at port %d ...\n", argv[1], atoi(argv[2]));
     }
 
     // Receive symbol of player
@@ -476,6 +476,7 @@ int main(int argc, char *argv[])
         }
         else if (strcmp(recv_data, MSG_LOSE) == 0)
         {
+            printCaroBoard();
             printf("You lose the game\n");
             close(client_fd);
             return 0;
